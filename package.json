@@ -1,0 +1,16 @@
+{
+  "name": "agent-forge-minihack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "forge": "./bin/forge.js"
+  },
+  "scripts": {
+    "start": "node ./bin/forge.js",
+    "agent": "node ./bin/agent.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
