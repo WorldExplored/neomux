@@ -1,17 +1,35 @@
 {
-  "name": "agent-forge-minihack",
+  "name": "neomux",
   "version": "0.1.0",
-  "private": true,
+  "description": "Rose Pine tmux cockpit with Neovim and an EdgeOne-backed Rust coding agent.",
   "type": "module",
+  "files": [
+    "bin",
+    "src",
+    "edgeone",
+    "scripts",
+    "docs",
+    "Cargo.toml",
+    "Cargo.lock",
+    ".env.example",
+    "CHANGELOG.md",
+    "README.md"
+  ],
   "bin": {
-    "forge": "./bin/forge.js"
+    "neomux": "./bin/neomux.js"
   },
   "scripts": {
-    "start": "node ./bin/forge.js",
-    "agent": "node ./bin/agent.js",
-    "check": "node --check ./bin/agent.js && node --check ./bin/forge.js && node --check ./functions/v1/chat/completions/index.js"
+    "install": "cargo build --release",
+    "start": "cargo run --",
+    "agent": "cargo run -- agent",
+    "check": "cargo fmt --check && cargo clippy -- -D warnings && cargo build --release && node --check ./bin/neomux.js && node --check ./scripts/edgeone-build.js && node --check ./scripts/package.js && node --check ./edgeone/cloud-functions/api/chat.js && node --check ./edgeone/cloud-functions/api/usage.js && node --check ./edgeone/cloud-functions/api/models.js",
+    "build": "cargo build --release",
+    "package": "node ./scripts/package.js",
+    "edgeone:build": "node ./scripts/edgeone-build.js",
+    "edgeone:dev": "edgeone makers dev",
+    "edgeone:deploy": "edgeone makers deploy ./dist"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

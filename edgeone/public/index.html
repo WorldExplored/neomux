@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>neomux</title>
+    <style>
+      :root { color-scheme: dark; background: #191724; color: #e0def4; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; }
+      main { width: min(760px, calc(100vw - 40px)); }
+      h1 { color: #eb6f92; font-size: 48px; margin: 0 0 12px; }
+      p { color: #c4a7e7; line-height: 1.5; }
+      code, pre { background: #1f1d2e; border: 1px solid #6e6a86; border-radius: 8px; }
+      pre { padding: 16px; overflow-x: auto; color: #9ccfd8; }
+      a { color: #ebbcba; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>neomux</h1>
+      <p>Rose Pine tmux cockpit: Neovim on the left, EdgeOne-backed coding agent on the right.</p>
+      <pre><code>cargo install --path .
+neomux .</code></pre>
+      <p>Hosted API: <code>/api/chat</code>, <code>/api/models</code>, <code>/api/usage</code>.</p>
+    </main>
+  </body>
+</html>

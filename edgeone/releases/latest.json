@@ -1,0 +1,6 @@
+{
+  "name": "neomux",
+  "version": "0.1.0",
+  "platforms": [],
+  "install": "curl -fsSL https://neomux.dev/install.sh | sh"
+}
