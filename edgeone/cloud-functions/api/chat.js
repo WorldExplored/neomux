@@ -1,4 +1,5 @@
 export async function onRequest({ request, env }) {
+  // Keeps model keys server-side while the CLI stays local.
   if (request.method !== "POST") {
     return new Response("method not allowed", { status: 405 });
   }

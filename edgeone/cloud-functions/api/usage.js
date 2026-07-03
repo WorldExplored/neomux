@@ -1,4 +1,5 @@
 export function onRequest() {
+  // Admits usage is unwired instead of faking telemetry.
   return Response.json({
     product: "neomux",
     pricing: "unknown/unverified",

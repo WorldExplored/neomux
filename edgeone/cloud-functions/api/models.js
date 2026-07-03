@@ -1,4 +1,5 @@
 export function onRequest() {
+  // Publishes the tiny catalog without guessing pricing.
   return Response.json({
     models: [
       {

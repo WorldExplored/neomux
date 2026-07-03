@@ -1,7 +1,7 @@
 {
   "name": "neomux",
   "version": "0.1.0",
-  "description": "Rose Pine tmux cockpit with Neovim and an EdgeOne-backed Rust coding agent.",
+  "description": "Cursor-style tmux cockpit for Neovim with an EdgeOne-backed Rust coding agent.",
   "type": "module",
   "files": [
     "bin",

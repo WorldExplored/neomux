@@ -2,8 +2,9 @@ import { mkdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const build = spawnSync("cargo", ["build", "--release"], { stdio: "inherit" });
-if (build.status !== 0) process.exit(build.status ?? 1);
+// Cuts a local binary archive for demos and handoff.
+const buildResult = spawnSync("cargo", ["build", "--release"], { stdio: "inherit" });
+if (buildResult.status !== 0) process.exit(buildResult.status ?? 1);
 
 const platform = `${process.platform}-${process.arch}`;
 const outDir = "dist/releases";
@@ -14,9 +15,9 @@ const binary = process.platform === "win32" ? "neomux.exe" : "neomux";
 const source = join("target", "release", binary);
 const archive = join(outDir, archiveName);
 
-const result = spawnSync("tar", ["-czf", archive, "-C", join("target", "release"), basename(source)], {
+const archiveResult = spawnSync("tar", ["-czf", archive, "-C", join("target", "release"), basename(source)], {
   stdio: "inherit",
 });
-if (result.status !== 0) process.exit(result.status ?? 1);
+if (archiveResult.status !== 0) process.exit(archiveResult.status ?? 1);
 
 console.log(archive);

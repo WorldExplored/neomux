@@ -9,7 +9,7 @@ use std::time::Instant;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_MODEL: &str = "@makers/deepseek-v4-flash";
 const DEFAULT_ENDPOINT: &str = "https://ai-gateway.edgeone.link/v1";
-const PROMPT: &str = "You are Neomux, a token-efficient coding agent running beside Neovim in tmux.\n\nRules:\n- Be concise and execution-focused.\n- Prefer minimal, explicit code over clever abstractions.\n- Do not chase theoretical completeness.\n- Avoid speculative edge-case handling.\n- Do not add defensive code unless it prevents a realistic failure.\n- Prefer small diffs and direct commands.\n- Ask before destructive actions.\n- When commands are needed, give exact commands.";
+const PROMPT: &str = "You are Neomux, a Cursor-style coding agent running beside Neovim in tmux.\n\nRules:\n- Be concise and execution-focused.\n- Prefer minimal, explicit code over clever abstractions.\n- Do not chase theoretical completeness.\n- Avoid speculative edge-case handling.\n- Do not add defensive code unless it prevents a realistic failure.\n- Prefer small diffs and direct commands.\n- Ask before destructive actions.\n- When commands are needed, give exact commands.";
 
 const RESET: &str = "\x1b[0m";
 const LOVE: &str = "\x1b[38;2;235;111;146m";
@@ -18,27 +18,31 @@ const MUTED: &str = "\x1b[38;2;110;106;134m";
 const GOLD: &str = "\x1b[38;2;246;193;119m";
 
 fn main() {
-    if let Err(error) = run() {
+    if let Err(error) = dispatch_cli() {
         eprintln!("{error}");
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<(), String> {
+// Routes the whole cockpit from one blunt, obvious entrypoint.
+fn dispatch_cli() -> Result<(), String> {
     let args: Vec<String> = env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("agent") => run_agent(),
-        Some("doctor") => doctor(),
-        Some("models") => models(),
-        Some("config") => config(),
-        Some("version") => version(args.get(1).is_some_and(|arg| arg == "--json")),
-        Some("--version") | Some("-V") => version(false),
-        Some("--help") | Some("-h") => help(),
+        Some("agent") => start_agent_pane(),
+        Some("doctor") => print_doctor_report(),
+        Some("models") => print_model_catalog(),
+        Some("config") => print_active_config(),
+        Some("version") => print_version(args.get(1).is_some_and(|arg| arg == "--json")),
+        Some("--version") | Some("-V") => print_version(false),
+        Some("--help") | Some("-h") => print_cli_help(),
         _ => launch_tmux(&args),
     }
 }
 
-fn help() -> Result<(), String> {
+// Shows the complete command surface without a banner tax.
+fn print_cli_help() -> Result<(), String> {
+    println!("neomux - Cursor-style AI lane for Neovim");
+    println!();
     println!("neomux [path] [--session <name>] [--no-attach]");
     println!();
     println!("Commands:");
@@ -50,6 +54,7 @@ fn help() -> Result<(), String> {
     Ok(())
 }
 
+// Boots the cockpit: Neovim left, Neomux right.
 fn launch_tmux(args: &[String]) -> Result<(), String> {
     let mut target = env::current_dir().map_err(|error| error.to_string())?;
     let mut session = env::var("NEOMUX_SESSION").ok();
@@ -63,22 +68,27 @@ fn launch_tmux(args: &[String]) -> Result<(), String> {
                 index += 1;
                 session = Some(args.get(index).ok_or("--session requires a name")?.clone());
             }
-            "-h" | "--help" => return help(),
+            "-h" | "--help" => return print_cli_help(),
             value if !value.starts_with('-') => target = PathBuf::from(value),
             value => return Err(format!("unknown argument: {value}")),
         }
         index += 1;
     }
 
-    require_command("tmux")?;
-    require_command("nvim")?;
-    let cwd = target.canonicalize().unwrap_or(target);
+    require_path_command("tmux")?;
+    require_path_command("nvim")?;
+    let cwd = target.canonicalize().map_err(|error| {
+        format!(
+            "workspace path not available: {}: {error}",
+            target.display()
+        )
+    })?;
     let name = session.unwrap_or_else(|| {
         let base = cwd
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("workspace");
-        format!("neomux-{}", slug(base))
+        format!("neomux-{}", session_slug(base))
     });
 
     if Command::new("tmux")
@@ -89,13 +99,13 @@ fn launch_tmux(args: &[String]) -> Result<(), String> {
         .is_ok_and(|status| status.success())
     {
         if attach {
-            tmux(["attach-session", "-t", &name])?;
+            invoke_tmux(["attach-session", "-t", &name])?;
         }
         println!("neomux session already running: {name}");
         return Ok(());
     }
 
-    let editor = tmux_output([
+    let editor = capture_tmux_output([
         "new-session",
         "-d",
         "-P",
@@ -104,32 +114,32 @@ fn launch_tmux(args: &[String]) -> Result<(), String> {
         "-s",
         &name,
         "-c",
-        path_str(&cwd)?,
+        utf8_path(&cwd)?,
     ])?;
-    tmux(["rename-window", "-t", &editor, "neomux"])?;
-    tmux([
+    invoke_tmux(["rename-window", "-t", &editor, "neomux"])?;
+    invoke_tmux([
         "set-option",
         "-t",
         &name,
         "status-style",
         "bg=#191724,fg=#e0def4",
     ])?;
-    tmux([
+    invoke_tmux([
         "set-option",
         "-t",
         &name,
         "status-left",
         "#[fg=#eb6f92,bold] neomux #[fg=#c4a7e7]",
     ])?;
-    tmux([
+    invoke_tmux([
         "set-option",
         "-t",
         &name,
         "pane-active-border-style",
         "fg=#eb6f92",
     ])?;
-    tmux(["set-option", "-t", &name, "pane-border-style", "fg=#6e6a86"])?;
-    tmux([
+    invoke_tmux(["set-option", "-t", &name, "pane-border-style", "fg=#6e6a86"])?;
+    invoke_tmux([
         "send-keys",
         "-t",
         &editor,
@@ -138,8 +148,8 @@ fn launch_tmux(args: &[String]) -> Result<(), String> {
     ])?;
 
     let exe = env::current_exe().map_err(|error| error.to_string())?;
-    let agent_command = format!("{} agent", shell_quote(path_str(&exe)?));
-    let agent = tmux_output([
+    let agent_command = format!("{} agent", quote_for_shell(utf8_path(&exe)?));
+    let agent = capture_tmux_output([
         "split-window",
         "-P",
         "-F",
@@ -148,20 +158,21 @@ fn launch_tmux(args: &[String]) -> Result<(), String> {
         "-t",
         &editor,
         "-c",
-        path_str(&cwd)?,
+        utf8_path(&cwd)?,
     ])?;
-    tmux(["send-keys", "-t", &agent, &agent_command, "C-m"])?;
-    tmux(["select-pane", "-t", &editor])?;
+    invoke_tmux(["send-keys", "-t", &agent, &agent_command, "C-m"])?;
+    invoke_tmux(["select-pane", "-t", &editor])?;
 
     if attach {
-        tmux(["attach-session", "-t", &name])?;
+        invoke_tmux(["attach-session", "-t", &name])?;
     } else {
         println!("neomux session started: {name}");
     }
     Ok(())
 }
 
-fn run_agent() -> Result<(), String> {
+// Runs the agent pane: terse tools, useful context, no ceremony.
+fn start_agent_pane() -> Result<(), String> {
     let cwd = env::current_dir().map_err(|error| error.to_string())?;
     let mut state = AgentState::new();
     println!(
@@ -186,20 +197,21 @@ fn run_agent() -> Result<(), String> {
         if line == "/exit" {
             break;
         }
-        if let Err(error) = handle_agent_line(line, &cwd, &mut state) {
+        if let Err(error) = answer_agent_prompt(line, &cwd, &mut state) {
             println!("{LOVE}{error}{RESET}");
         }
     }
     Ok(())
 }
 
-fn handle_agent_line(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(), String> {
+// Dispatches slash tools before EdgeOne gets a single token.
+fn answer_agent_prompt(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(), String> {
     if !line.starts_with('/') {
-        return chat(line, state);
+        return stream_edgeone_chat(line, state);
     }
     let (command, arg) = split_command(line);
     match command {
-        "/help" => agent_help(),
+        "/help" => print_agent_help(),
         "/clear" => {
             state.conversation.clear();
             println!("conversation cleared");
@@ -234,7 +246,8 @@ fn handle_agent_line(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(
             Ok(())
         }
         "/find" => {
-            let output = run_capture(
+            let output = capture_command_output(
+                &format!("/find {arg}"),
                 "rg",
                 &[
                     "--line-number",
@@ -249,7 +262,7 @@ fn handle_agent_line(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(
             )?;
             print!("{}", output.text);
             println!("{MUTED}exit:{RESET} {} in {}ms", output.code, output.ms);
-            state.push_command(format!("/find {arg}"), output);
+            state.remember_command(output);
             Ok(())
         }
         "/read" => {
@@ -291,7 +304,7 @@ fn handle_agent_line(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(
             if arg.is_empty() {
                 return Err("usage: /run <cmd>".into());
             }
-            if let Some(reason) = risk(arg) {
+            if let Some(reason) = destructive_command_reason(arg) {
                 print!("{GOLD}risk: {reason}. Type \"run\" to continue:{RESET} ");
                 io::stdout().flush().map_err(|error| error.to_string())?;
                 let mut answer = String::new();
@@ -304,13 +317,13 @@ fn handle_agent_line(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(
                 }
             }
             println!("{MUTED}cwd:{RESET} {}", cwd.display());
-            let output = run_shell(arg, cwd)?;
+            let output = capture_shell_command(arg, cwd)?;
             print!("{}", output.text);
             if !output.text.ends_with('\n') && !output.text.is_empty() {
                 println!();
             }
             println!("{MUTED}exit:{RESET} {} in {}ms", output.code, output.ms);
-            state.push_command(arg.to_string(), output);
+            state.remember_command(output);
             Ok(())
         }
         "/model" => {
@@ -341,7 +354,8 @@ fn handle_agent_line(line: &str, cwd: &Path, state: &mut AgentState) -> Result<(
     }
 }
 
-fn agent_help() -> Result<(), String> {
+// Keeps the pane self-documenting without drowning the prompt.
+fn print_agent_help() -> Result<(), String> {
     println!("/find <text>          search workspace");
     println!("/read <file>          load file context");
     println!("/context              show loaded context");
@@ -355,30 +369,32 @@ fn agent_help() -> Result<(), String> {
     Ok(())
 }
 
-fn chat(prompt: &str, state: &mut AgentState) -> Result<(), String> {
+// Streams EdgeOne tokens straight into tmux.
+fn stream_edgeone_chat(prompt: &str, state: &mut AgentState) -> Result<(), String> {
+    let key = env::var("MAKERS_MODELS_KEY").map_err(|_| {
+        "missing MAKERS_MODELS_KEY. Fix: export MAKERS_MODELS_KEY=\"...\"".to_string()
+    })?;
     let started = Instant::now();
     let body = state.chat_body(prompt);
-    let endpoint = chat_endpoint(&state.endpoint);
-    let mut command = Command::new("curl");
-    command.args(["-sS", "-N", "-X", "POST", &endpoint]);
-    if let Ok(key) = env::var("MAKERS_MODELS_KEY") {
-        command.args(["-H", &format!("Authorization: Bearer {key}")]);
-    } else if is_makers_gateway(&state.endpoint) {
-        return Err("missing MAKERS_MODELS_KEY. Fix: export MAKERS_MODELS_KEY=\"...\"".into());
-    }
-    let mut child = command
+    let endpoint = format!("{}/chat/completions", state.endpoint.trim_end_matches('/'));
+    let mut child = Command::new("curl")
+        .args(["-sS", "-N", "-X", "POST", &endpoint])
+        .args(["-H", &format!("Authorization: Bearer {key}")])
         .args(["-H", "Content-Type: application/json"])
         .args(["--data", &body])
         .stdout(Stdio::piped())
         .spawn()
-        .map_err(|_| "curl is required for EdgeOne chat. Fix: install curl.".to_string())?;
+        .map_err(|_| {
+            "curl is required for EdgeOne chat. Fix: install curl or use the hosted proxy later."
+                .to_string()
+        })?;
 
     let stdout = child.stdout.take().ok_or("failed to read curl output")?;
     let reader = BufReader::new(stdout);
     let mut answer = String::new();
     for line in reader.lines() {
         let line = line.map_err(|error| error.to_string())?;
-        if let Some(token) = sse_content(&line) {
+        if let Some(token) = edgeone_sse_token(&line) {
             print!("{token}");
             io::stdout().flush().map_err(|error| error.to_string())?;
             answer.push_str(&token);
@@ -403,6 +419,7 @@ fn chat(prompt: &str, state: &mut AgentState) -> Result<(), String> {
     Ok(())
 }
 
+// Holds only the state the agent actually reuses.
 struct AgentState {
     endpoint: String,
     model: String,
@@ -431,14 +448,14 @@ impl AgentState {
         }
     }
 
-    fn push_command(&mut self, label: String, mut result: CommandResult) {
-        result.label = label;
+    fn remember_command(&mut self, result: CommandResult) {
         self.commands.push_back(result);
         while self.commands.len() > 8 {
             self.commands.pop_front();
         }
     }
 
+    // Builds compact chat JSON without a runtime dependency.
     fn chat_body(&self, prompt: &str) -> String {
         let mut messages = vec![("system".to_string(), PROMPT.to_string())];
         let context = self.context_prompt();
@@ -450,7 +467,7 @@ impl AgentState {
 
         let mut body = format!(
             "{{\"model\":\"{}\",\"stream\":true,\"messages\":[",
-            json(&self.model)
+            escape_json_string(&self.model)
         );
         for (index, (role, content)) in messages.iter().enumerate() {
             if index > 0 {
@@ -458,8 +475,8 @@ impl AgentState {
             }
             body.push_str(&format!(
                 "{{\"role\":\"{}\",\"content\":\"{}\"}}",
-                json(role),
-                json(content)
+                escape_json_string(role),
+                escape_json_string(content)
             ));
         }
         body.push(']');
@@ -473,6 +490,7 @@ impl AgentState {
         body
     }
 
+    // Turns loaded files and commands into sharp model context.
     fn context_prompt(&self) -> String {
         let mut text = String::new();
         if !self.files.is_empty() {
@@ -506,10 +524,11 @@ struct CommandResult {
     ms: u128,
 }
 
-fn doctor() -> Result<(), String> {
+// Proves local setup before the demo goes live.
+fn print_doctor_report() -> Result<(), String> {
     let mut failed = false;
     for command in ["tmux", "nvim", "rg", "curl"] {
-        if command_exists(command) {
+        if path_has_command(command) {
             println!("ok   {command}");
         } else {
             failed = true;
@@ -537,13 +556,14 @@ fn doctor() -> Result<(), String> {
         println!("warn EdgeOne endpoint  fix: check network or EDGEONE_BASE_URL");
     }
     if failed {
-        io::stdout().flush().map_err(|error| error.to_string())?;
-        return Err("doctor found missing requirements".into());
+        println!("doctor found missing requirements");
+        std::process::exit(1);
     }
     Ok(())
 }
 
-fn models() -> Result<(), String> {
+// Prints the tiny model catalog honestly.
+fn print_model_catalog() -> Result<(), String> {
     println!(
         "{:<30} {:<10} {:<12} pricing",
         "model", "vendor", "streaming"
@@ -559,10 +579,12 @@ fn models() -> Result<(), String> {
     Ok(())
 }
 
-fn config() -> Result<(), String> {
-    let endpoint = env::var("EDGEONE_BASE_URL").unwrap_or_else(|_| DEFAULT_ENDPOINT.into());
-    println!("endpoint={}", endpoint);
-    println!("chatEndpoint={}", chat_endpoint(&endpoint));
+// Shows live config with secrets masked by design.
+fn print_active_config() -> Result<(), String> {
+    println!(
+        "endpoint={}",
+        env::var("EDGEONE_BASE_URL").unwrap_or_else(|_| DEFAULT_ENDPOINT.into())
+    );
     println!(
         "model={}",
         env::var("EDGEONE_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.into())
@@ -578,33 +600,8 @@ fn config() -> Result<(), String> {
     Ok(())
 }
 
-fn chat_endpoint(base: &str) -> String {
-    let base = base.trim_end_matches('/');
-    if base.ends_with("/chat/completions") || base.ends_with("/api/chat") {
-        base.into()
-    } else if is_makers_gateway(base) {
-        let base = if base.ends_with("/v1") {
-            base.to_string()
-        } else {
-            format!("{base}/v1")
-        };
-        format!("{base}/chat/completions")
-    } else if base.ends_with("/api") {
-        format!("{base}/chat")
-    } else if base.ends_with("/v1") {
-        format!("{base}/chat/completions")
-    } else {
-        format!("{base}/api/chat")
-    }
-}
-
-fn is_makers_gateway(endpoint: &str) -> bool {
-    endpoint
-        .trim_end_matches('/')
-        .starts_with("https://ai-gateway.edgeone.link")
-}
-
-fn version(json_output: bool) -> Result<(), String> {
+// Emits release identity for humans and installers.
+fn print_version(json_output: bool) -> Result<(), String> {
     let target = format!("{}-{}", env::consts::ARCH, env::consts::OS);
     if json_output {
         println!(
@@ -622,11 +619,16 @@ fn split_command(line: &str) -> (&str, &str) {
         .map_or((line, ""), |(command, arg)| (command, arg.trim()))
 }
 
-fn run_shell(command: &str, cwd: &Path) -> Result<CommandResult, String> {
-    run_capture("sh", &["-lc", command], cwd)
+fn capture_shell_command(command: &str, cwd: &Path) -> Result<CommandResult, String> {
+    capture_command_output(command, "sh", &["-lc", command], cwd)
 }
 
-fn run_capture(program: &str, args: &[&str], cwd: &Path) -> Result<CommandResult, String> {
+fn capture_command_output(
+    label: &str,
+    program: &str,
+    args: &[&str],
+    cwd: &Path,
+) -> Result<CommandResult, String> {
     let started = Instant::now();
     let output = Command::new(program)
         .args(args)
@@ -636,14 +638,14 @@ fn run_capture(program: &str, args: &[&str], cwd: &Path) -> Result<CommandResult
     let mut text = String::from_utf8_lossy(&output.stdout).to_string();
     text.push_str(&String::from_utf8_lossy(&output.stderr));
     Ok(CommandResult {
-        label: program.into(),
+        label: label.into(),
         text,
         code: output.status.code().unwrap_or(1),
         ms: started.elapsed().as_millis(),
     })
 }
 
-fn risk(command: &str) -> Option<&'static str> {
+fn destructive_command_reason(command: &str) -> Option<&'static str> {
     let lower = command.to_lowercase();
     if lower.contains("rm -rf") || lower.contains("rm -fr") {
         Some("recursive force remove")
@@ -656,7 +658,7 @@ fn risk(command: &str) -> Option<&'static str> {
     }
 }
 
-fn sse_content(line: &str) -> Option<String> {
+fn edgeone_sse_token(line: &str) -> Option<String> {
     let data = line.strip_prefix("data: ")?.trim();
     if data == "[DONE]" {
         return None;
@@ -687,22 +689,23 @@ fn sse_content(line: &str) -> Option<String> {
     Some(raw)
 }
 
-fn json(value: &str) -> String {
-    value
-        .chars()
-        .flat_map(|ch| match ch {
-            '"' => "\\\"".chars().collect::<Vec<_>>(),
-            '\\' => "\\\\".chars().collect(),
-            '\n' => "\\n".chars().collect(),
-            '\r' => "\\r".chars().collect(),
-            '\t' => "\\t".chars().collect(),
-            other => vec![other],
-        })
-        .collect()
+fn escape_json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            other => escaped.push(other),
+        }
+    }
+    escaped
 }
 
-fn require_command(command: &str) -> Result<(), String> {
-    if command_exists(command) {
+fn require_path_command(command: &str) -> Result<(), String> {
+    if path_has_command(command) {
         Ok(())
     } else {
         Err(format!(
@@ -711,7 +714,7 @@ fn require_command(command: &str) -> Result<(), String> {
     }
 }
 
-fn command_exists(command: &str) -> bool {
+fn path_has_command(command: &str) -> bool {
     Command::new("sh")
         .args(["-lc", &format!("command -v {command}")])
         .stdout(Stdio::null())
@@ -729,7 +732,7 @@ fn endpoint_reachable(endpoint: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-fn tmux<const N: usize>(args: [&str; N]) -> Result<(), String> {
+fn invoke_tmux<const N: usize>(args: [&str; N]) -> Result<(), String> {
     let status = Command::new("tmux")
         .args(args)
         .status()
@@ -741,7 +744,7 @@ fn tmux<const N: usize>(args: [&str; N]) -> Result<(), String> {
     }
 }
 
-fn tmux_output<const N: usize>(args: [&str; N]) -> Result<String, String> {
+fn capture_tmux_output<const N: usize>(args: [&str; N]) -> Result<String, String> {
     let output = Command::new("tmux")
         .args(args)
         .output()
@@ -752,16 +755,16 @@ fn tmux_output<const N: usize>(args: [&str; N]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn path_str(path: &Path) -> Result<&str, String> {
+fn utf8_path(path: &Path) -> Result<&str, String> {
     path.to_str()
         .ok_or_else(|| "path is not valid utf-8".into())
 }
 
-fn shell_quote(value: &str) -> String {
+fn quote_for_shell(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn slug(value: &str) -> String {
+fn session_slug(value: &str) -> String {
     value
         .chars()
         .map(|ch| {

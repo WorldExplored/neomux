@@ -8,9 +8,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const binary = join(root, "target", "release", process.platform === "win32" ? "neomux.exe" : "neomux");
 
 if (!existsSync(binary)) {
-  const result = spawnSync("cargo", ["build", "--release"], { cwd: root, stdio: "inherit" });
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  // Npm users get the Rust binary without learning Cargo first.
+  const buildResult = spawnSync("cargo", ["build", "--release"], { cwd: root, stdio: "inherit" });
+  if (buildResult.status !== 0) process.exit(buildResult.status ?? 1);
 }
 
-const result = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
-process.exit(result.status ?? 1);
+const cliResult = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
+process.exit(cliResult.status ?? 1);
