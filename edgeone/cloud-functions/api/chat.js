@@ -10,12 +10,12 @@ export async function onRequest({ request, env }) {
   }
 
   // Accepts either a root gateway URL or a /v1 URL.
-  const configuredBaseUrl =
+  const configuredGatewayUrl =
     env.EDGEONE_GATEWAY_BASE_URL || env.EDGEONE_BASE_URL || "https://ai-gateway.edgeone.link/v1";
-  const trimmedBaseUrl = configuredBaseUrl.replace(/\/+$/, "");
-  const baseUrl = trimmedBaseUrl.endsWith("/v1") ? trimmedBaseUrl : `${trimmedBaseUrl}/v1`;
+  const trimmedGatewayUrl = configuredGatewayUrl.replace(/\/+$/, "");
+  const gatewayUrl = trimmedGatewayUrl.endsWith("/v1") ? trimmedGatewayUrl : `${trimmedGatewayUrl}/v1`;
   const body = await request.text();
-  return fetch(`${baseUrl}/chat/completions`, {
+  return fetch(`${gatewayUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
