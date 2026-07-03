@@ -32,10 +32,10 @@ MAKERS_MODELS_KEY
 Optional:
 
 ```bash
-EDGEONE_GATEWAY_BASE_URL=https://ai-gateway.edgeone.link/v1
+EDGEONE_BASE_URL=https://ai-gateway.edgeone.link/v1
 ```
 
-When CLI `EDGEONE_BASE_URL` is a deployed EdgeOne domain, neomux sends chat requests to `/api/chat`. When it is the direct Makers Models gateway, neomux sends requests to `/v1/chat/completions`.
+The local CLI sends chat requests to `EDGEONE_BASE_URL/chat/completions`. The hosted `/api/chat` route is the EdgeOne proxy endpoint for server/demo use.
 
 Hosted routes:
 
