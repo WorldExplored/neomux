@@ -1,0 +1,11 @@
+[package]
+name = "neomux"
+version = "0.1.0"
+edition = "2024"
+description = "Rose Pine tmux cockpit with Neovim and an EdgeOne-backed coding agent."
+license = "MIT"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
