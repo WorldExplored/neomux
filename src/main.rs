@@ -356,23 +356,22 @@ fn agent_help() -> Result<(), String> {
 }
 
 fn chat(prompt: &str, state: &mut AgentState) -> Result<(), String> {
-    let key = env::var("MAKERS_MODELS_KEY").map_err(|_| {
-        "missing MAKERS_MODELS_KEY. Fix: export MAKERS_MODELS_KEY=\"...\"".to_string()
-    })?;
     let started = Instant::now();
     let body = state.chat_body(prompt);
-    let endpoint = format!("{}/chat/completions", state.endpoint.trim_end_matches('/'));
-    let mut child = Command::new("curl")
-        .args(["-sS", "-N", "-X", "POST", &endpoint])
-        .args(["-H", &format!("Authorization: Bearer {key}")])
+    let endpoint = chat_endpoint(&state.endpoint);
+    let mut command = Command::new("curl");
+    command.args(["-sS", "-N", "-X", "POST", &endpoint]);
+    if let Ok(key) = env::var("MAKERS_MODELS_KEY") {
+        command.args(["-H", &format!("Authorization: Bearer {key}")]);
+    } else if is_makers_gateway(&state.endpoint) {
+        return Err("missing MAKERS_MODELS_KEY. Fix: export MAKERS_MODELS_KEY=\"...\"".into());
+    }
+    let mut child = command
         .args(["-H", "Content-Type: application/json"])
         .args(["--data", &body])
         .stdout(Stdio::piped())
         .spawn()
-        .map_err(|_| {
-            "curl is required for EdgeOne chat. Fix: install curl or use the hosted proxy later."
-                .to_string()
-        })?;
+        .map_err(|_| "curl is required for EdgeOne chat. Fix: install curl.".to_string())?;
 
     let stdout = child.stdout.take().ok_or("failed to read curl output")?;
     let reader = BufReader::new(stdout);
@@ -561,10 +560,9 @@ fn models() -> Result<(), String> {
 }
 
 fn config() -> Result<(), String> {
-    println!(
-        "endpoint={}",
-        env::var("EDGEONE_BASE_URL").unwrap_or_else(|_| DEFAULT_ENDPOINT.into())
-    );
+    let endpoint = env::var("EDGEONE_BASE_URL").unwrap_or_else(|_| DEFAULT_ENDPOINT.into());
+    println!("endpoint={}", endpoint);
+    println!("chatEndpoint={}", chat_endpoint(&endpoint));
     println!(
         "model={}",
         env::var("EDGEONE_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.into())
@@ -578,6 +576,32 @@ fn config() -> Result<(), String> {
         }
     );
     Ok(())
+}
+
+fn chat_endpoint(base: &str) -> String {
+    let base = base.trim_end_matches('/');
+    if base.ends_with("/chat/completions") || base.ends_with("/api/chat") {
+        base.into()
+    } else if is_makers_gateway(base) {
+        let base = if base.ends_with("/v1") {
+            base.to_string()
+        } else {
+            format!("{base}/v1")
+        };
+        format!("{base}/chat/completions")
+    } else if base.ends_with("/api") {
+        format!("{base}/chat")
+    } else if base.ends_with("/v1") {
+        format!("{base}/chat/completions")
+    } else {
+        format!("{base}/api/chat")
+    }
+}
+
+fn is_makers_gateway(endpoint: &str) -> bool {
+    endpoint
+        .trim_end_matches('/')
+        .starts_with("https://ai-gateway.edgeone.link")
 }
 
 fn version(json_output: bool) -> Result<(), String> {

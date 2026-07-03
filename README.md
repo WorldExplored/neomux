@@ -68,26 +68,9 @@ Optional EdgeOne Pages Function endpoint:
 export EDGEONE_BASE_URL="https://<your-edgeone-domain>"
 ```
 
-The CLI appends `/v1` when needed, so either `https://<your-edgeone-domain>` or `https://<your-edgeone-domain>/v1` works.
+For a deployed EdgeOne domain, neomux calls `/api/chat`. For the direct Makers Models gateway, it calls `/v1/chat/completions`.
 
-This repo includes `functions/v1/chat/completions/index.js`, which accepts the same chat payload the CLI sends. With a Pages Function endpoint, the default model alias is `deepseek`; direct Makers gateway usage keeps the existing `@makers/deepseek-v4-flash` default.
-
-Pages Function model aliases:
-
-```text
-deepseek
-deepseek-v3
-deepseek-v32
-deepseek-r1
-makers-deepseek
-minimax
-hy3
-codex
-codex-frontier
-fable
-```
-
-The `makers-deepseek`, `minimax`, `hy3`, `codex`, `codex-frontier`, and `fable` aliases require `MAKERS_MODELS_KEY` on the request or in the deployed function environment.
+This repo includes `edgeone/cloud-functions/api/chat.js`, which proxies the same chat payload the CLI sends. Set `MAKERS_MODELS_KEY` in the deployed EdgeOne function environment to use the hosted proxy without a local key.
 
 Agent commands:
 
@@ -129,6 +112,13 @@ Console settings:
   "outputDirectory": "dist",
   "nodeVersion": "22.11.0"
 }
+```
+
+Function environment:
+
+```bash
+MAKERS_MODELS_KEY=...
+EDGEONE_GATEWAY_BASE_URL=https://ai-gateway.edgeone.link/v1
 ```
 
 Deploy:

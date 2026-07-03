@@ -97,7 +97,13 @@ header();
 const rl = readline.createInterface({ input, output, prompt: "\x1b[38;5;175mforge>\x1b[0m " });
 
 while (true) {
-  const line = (await rl.question(rl.getPrompt())).trim();
+  let line;
+  try {
+    line = (await rl.question(rl.getPrompt())).trim();
+  } catch (error) {
+    if (error.code === "ERR_USE_AFTER_CLOSE") break;
+    throw error;
+  }
   if (!line) continue;
   if (line === "/exit") break;
   if (line === "/clear") {
