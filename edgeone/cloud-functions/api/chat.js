@@ -9,9 +9,11 @@ export async function onRequest({ request, env }) {
     return Response.json({ error: "MAKERS_MODELS_KEY is not configured" }, { status: 500 });
   }
 
-  const baseUrl = normalizeBaseUrl(
-    env.EDGEONE_GATEWAY_BASE_URL || env.EDGEONE_BASE_URL || "https://ai-gateway.edgeone.link/v1",
-  );
+  // Accepts either a root gateway URL or a /v1 URL.
+  const configuredBaseUrl =
+    env.EDGEONE_GATEWAY_BASE_URL || env.EDGEONE_BASE_URL || "https://ai-gateway.edgeone.link/v1";
+  const trimmedBaseUrl = configuredBaseUrl.replace(/\/+$/, "");
+  const baseUrl = trimmedBaseUrl.endsWith("/v1") ? trimmedBaseUrl : `${trimmedBaseUrl}/v1`;
   const body = await request.text();
   return fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -21,9 +23,4 @@ export async function onRequest({ request, env }) {
     },
     body,
   });
-}
-
-function normalizeBaseUrl(value) {
-  const baseUrl = value.replace(/\/+$/, "");
-  return baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
 }
