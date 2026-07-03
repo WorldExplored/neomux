@@ -94,10 +94,14 @@ function normalizeModel(model) {
   throw new Error(`Unsupported model: ${key}`);
 }
 
-function gatewayToken(request) {
+function gatewayToken(request, env) {
   const authorization = request.headers.get("Authorization");
   if (authorization?.toLowerCase().startsWith("bearer ")) {
     return authorization.slice(7).trim();
+  }
+
+  if (env?.MAKERS_MODELS_KEY) {
+    return env.MAKERS_MODELS_KEY;
   }
 
   if (typeof process !== "undefined" && process.env?.MAKERS_MODELS_KEY) {
@@ -111,8 +115,8 @@ function gatewayToken(request) {
   return "";
 }
 
-async function callGateway({ request, model, messages }) {
-  const token = gatewayToken(request);
+async function callGateway({ request, env, model, messages }) {
+  const token = gatewayToken(request, env);
   if (!token) {
     return jsonResponse(
       {
@@ -154,7 +158,7 @@ export async function onRequestOptions() {
   });
 }
 
-export async function onRequestPost({ request }) {
+export async function onRequestPost({ request, env }) {
   let body;
   try {
     body = await request.json();
@@ -186,7 +190,7 @@ export async function onRequestPost({ request }) {
 
   try {
     if (modelConfig.source === "gateway") {
-      return await callGateway({ request, model: modelConfig.model, messages });
+      return await callGateway({ request, env, model: modelConfig.model, messages });
     }
 
     const response = await AI.chatCompletions({
