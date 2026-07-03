@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 const makersGateway = "https://ai-gateway.edgeone.link/v1";
-const endpoint = (process.env.EDGEONE_BASE_URL ?? makersGateway).replace(/\/+$/, "");
+const endpoint = normalizeEndpoint(process.env.EDGEONE_BASE_URL);
 const usesMakersGateway = endpoint === makersGateway;
 let model = process.env.EDGEONE_MODEL ?? (usesMakersGateway ? "@makers/deepseek-v4-flash" : "deepseek");
 const messages = [
@@ -27,6 +27,11 @@ function requireKey() {
     console.error("Set MAKERS_MODELS_KEY to use EdgeOne Makers Models.");
     process.exit(1);
   }
+}
+
+function normalizeEndpoint(value) {
+  const endpoint = (value ?? makersGateway).replace(/\/+$/, "");
+  return endpoint.endsWith("/v1") ? endpoint : `${endpoint}/v1`;
 }
 
 function requestHeaders() {
@@ -66,21 +71,24 @@ async function ask(prompt) {
   let answer = "";
   const decoder = new TextDecoder();
   let buffer = "";
+  const writeLine = (line) => {
+    if (!line.startsWith("data: ")) return;
+    const data = line.slice(6).trim();
+    if (!data || data === "[DONE]") return;
+    const json = JSON.parse(data);
+    const delta = json.choices?.[0]?.delta?.content ?? "";
+    answer += delta;
+    output.write(delta);
+  };
+
   for await (const chunk of response.body) {
     buffer += decoder.decode(chunk, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") continue;
-      const json = JSON.parse(data);
-      const delta = json.choices?.[0]?.delta?.content ?? "";
-      answer += delta;
-      output.write(delta);
-    }
+    for (const line of lines) writeLine(line);
   }
   buffer += decoder.decode();
+  if (buffer) writeLine(buffer);
   output.write("\n");
   messages.push({ role: "assistant", content: answer });
 }

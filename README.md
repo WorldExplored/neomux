@@ -26,10 +26,12 @@ export EDGEONE_MODEL="@makers/deepseek-v4-flash"
 Optional EdgeOne Pages Function endpoint:
 
 ```bash
-export EDGEONE_BASE_URL="https://<your-edgeone-domain>/v1"
+export EDGEONE_BASE_URL="https://<your-edgeone-domain>"
 ```
 
-This repo includes `functions/v1/chat/completions/index.js`, which accepts the same streaming chat payload the CLI sends. With a Pages Function endpoint, the default model alias is `deepseek`; direct Makers gateway usage keeps the existing `@makers/deepseek-v4-flash` default.
+The CLI appends `/v1` when needed, so either `https://<your-edgeone-domain>` or `https://<your-edgeone-domain>/v1` works.
+
+This repo includes `functions/v1/chat/completions/index.js`, which accepts the same chat payload the CLI sends. With a Pages Function endpoint, the default model alias is `deepseek`; direct Makers gateway usage keeps the existing `@makers/deepseek-v4-flash` default.
 
 Pages Function model aliases:
 

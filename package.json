@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node ./bin/forge.js",
-    "agent": "node ./bin/agent.js"
+    "agent": "node ./bin/agent.js",
+    "check": "node --check ./bin/agent.js && node --check ./bin/forge.js && node --check ./functions/v1/chat/completions/index.js"
   },
   "engines": {
     "node": ">=18"

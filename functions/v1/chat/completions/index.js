@@ -115,7 +115,7 @@ function gatewayToken(request, env) {
   return "";
 }
 
-async function callGateway({ request, env, model, messages }) {
+async function callGateway({ request, env, model, messages, stream }) {
   const token = gatewayToken(request, env);
   if (!token) {
     return jsonResponse(
@@ -137,7 +137,7 @@ async function callGateway({ request, env, model, messages }) {
     body: JSON.stringify({
       model,
       messages,
-      stream: true,
+      stream,
     }),
   });
 
@@ -147,7 +147,7 @@ async function callGateway({ request, env, model, messages }) {
   }
 
   return new Response(response.body, {
-    headers: streamingHeaders,
+    headers: stream ? streamingHeaders : jsonHeaders,
   });
 }
 
@@ -189,15 +189,27 @@ export async function onRequestPost({ request, env }) {
   }
 
   try {
+    const stream = body.stream !== false;
+
     if (modelConfig.source === "gateway") {
-      return await callGateway({ request, env, model: modelConfig.model, messages });
+      return await callGateway({
+        request,
+        env,
+        model: modelConfig.model,
+        messages,
+        stream,
+      });
     }
 
     const response = await AI.chatCompletions({
       model: modelConfig.model,
       messages,
-      stream: true,
+      stream,
     });
+
+    if (!stream) {
+      return jsonResponse(response, 200);
+    }
 
     return new Response(response, {
       headers: streamingHeaders,
