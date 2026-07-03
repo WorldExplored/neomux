@@ -4,8 +4,10 @@ import { stdin as input, stdout as output } from "node:process";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
-const endpoint = process.env.EDGEONE_BASE_URL ?? "https://ai-gateway.edgeone.link/v1";
-let model = process.env.EDGEONE_MODEL ?? "@makers/deepseek-v4-flash";
+const makersGateway = "https://ai-gateway.edgeone.link/v1";
+const endpoint = (process.env.EDGEONE_BASE_URL ?? makersGateway).replace(/\/+$/, "");
+const usesMakersGateway = endpoint === makersGateway;
+let model = process.env.EDGEONE_MODEL ?? (usesMakersGateway ? "@makers/deepseek-v4-flash" : "deepseek");
 const messages = [
   {
     role: "system",
@@ -21,10 +23,22 @@ function header() {
 }
 
 function requireKey() {
-  if (!process.env.MAKERS_MODELS_KEY) {
+  if (usesMakersGateway && !process.env.MAKERS_MODELS_KEY) {
     console.error("Set MAKERS_MODELS_KEY to use EdgeOne Makers Models.");
     process.exit(1);
   }
+}
+
+function requestHeaders() {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (process.env.MAKERS_MODELS_KEY) {
+    headers.Authorization = `Bearer ${process.env.MAKERS_MODELS_KEY}`;
+  }
+
+  return headers;
 }
 
 function run(command) {
@@ -40,10 +54,7 @@ async function ask(prompt) {
 
   const response = await fetch(`${endpoint}/chat/completions`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.MAKERS_MODELS_KEY}`,
-      "Content-Type": "application/json",
-    },
+    headers: requestHeaders(),
     body: JSON.stringify({ model, messages, stream: true }),
   });
 
